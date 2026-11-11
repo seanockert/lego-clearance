@@ -1,0 +1,29 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "lego-clearance",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "observability": { "enabled": true },
+  "triggers": {
+    // Poll every 15 minutes. 22:00 UTC is 8am in Brisbane (no daylight saving) for the daily heartbeat.
+    "crons": ["*/15 * * * *", "0 22 * * *"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "lego-clearance",
+      "database_id": "432863c6-a970-4b44-83ee-9cea87949e41",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    // Minimum % off the was-price for a clearance alert.
+    "MIN_PERCENT_OFF": "40",
+    // Set number to target price in dollars, for example {"77078": 100}.
+    "WATCHLIST": "{}"
+  }
+  // Secrets (set with `bunx wrangler secret put <NAME>`):
+  // TELEGRAM_BOT_TOKEN - token of the Telegram bot that sends alerts.
+  // TELEGRAM_CHAT_ID - your chat ID with the bot.
+  // ADMIN_TOKEN - bearer token for the /debug routes.
+}
