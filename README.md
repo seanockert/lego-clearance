@@ -4,15 +4,19 @@ A Cloudflare Worker that sends a Telegram alert when a LEGO set is marked down a
 
 ## How it works
 
-Every 15 minutes, the Worker:
+At 7am and 1pm Brisbane time, the Worker:
 
 1. Reads all LEGO clearance items from each retailer.
 2. Reads which watched stores have each item in stock.
 3. Compares the result with the last state in D1.
 4. Sends a Telegram alert for a new deal (40% or more off, in stock at a watched store), a price drop, or new stock at a watched store.
 
+It runs again 20 and 40 minutes later in each window.
+These runs are backups for when a retailer blocks a run.
+They send only alerts that the earlier runs did not send.
+
 Each day at 8am Brisbane time, it sends a status message.
-After 3 failed runs in a row for a retailer, it sends a "monitor broken" alert.
+After 3 failed runs in a row for a retailer (one full window), it sends a "monitor broken" alert.
 
 ## Data sources
 
@@ -22,11 +26,13 @@ After 3 failed runs in a row for a retailer, it sends a "monitor broken" alert.
 - **Target**:
   - Clearance items: the public page `https://www.target.com.au/c/toys/lego/W152974?clearance=True`.
     The products are in the page's `__NEXT_DATA__` JSON.
+  - Target's bot protection (Akamai) sometimes blocks requests from Cloudflare with HTTP 403 "Access Denied".
+    A blocked page gets one more try after 5 seconds.
   - Store stock: the Constructor.io search API that Target's pages use, with the public site key from the same page.
     The `instorestockpot` field lists the stores that have the item.
     In tests, this data matched the in-store check on Target's product page, but it may be "any stock in the area" more than exact shelf stock.
   - Was-price: Target shows none on clearance items.
-    Each run reads one page of the full LEGO catalogue (all pages every 3 hours) and saves the normal price of each set in `regular_prices`.
+    Each run reads the full LEGO catalogue (about 10 pages) and saves the normal price of each set in `regular_prices`.
     A clearance item is compared with its last normal price.
     An item that was already on clearance when the monitor first saw it has no was-price, so it does not alert.
 

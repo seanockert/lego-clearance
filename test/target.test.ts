@@ -1,8 +1,8 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import items from "./fixtures/target-items.json";
 import { detect } from "../src/diff";
 import { formatAlert, toTelegramText } from "../src/notify";
-import { parseConstructorKey, parseListing, parseStock } from "../src/retailers/target";
+import { fetchHtml, parseConstructorKey, parseListing, parseStock } from "../src/retailers/target";
 
 const html = await Bun.file(new URL("./fixtures/target-clearance.html", import.meta.url)).text();
 const settings = { minPercentOff: 40, watchlist: new Map<string, number>() };
@@ -77,5 +77,39 @@ describe("Target alerts", () => {
     expect(text).toContain("<b>New deal: Target 76970 $34</b>");
     expect(text).toContain("$34 (was $60, 43% off)");
     expect(text).toContain("- Carindale");
+  });
+});
+
+describe("Target page fetch", () => {
+  const realFetch = globalThis.fetch;
+  const respond = (statuses: number[]) => {
+    const calls: string[] = [];
+    globalThis.fetch = (async (url: string) => {
+      calls.push(url);
+      const status = statuses[calls.length - 1] ?? 200;
+      return new Response(status === 200 ? "<html>ok</html>" : "Access Denied", { status });
+    }) as typeof fetch;
+    return calls;
+  };
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  test("tries a blocked page again and returns the second response", async () => {
+    const calls = respond([403, 200]);
+    expect(await fetchHtml("https://www.target.com.au/x", 0)).toBe("<html>ok</html>");
+    expect(calls).toHaveLength(2);
+  });
+
+  test("throws when the page is blocked twice", async () => {
+    const calls = respond([403, 403]);
+    await expect(fetchHtml("https://www.target.com.au/x", 0)).rejects.toThrow("HTTP 403 from www.target.com.au");
+    expect(calls).toHaveLength(2);
+  });
+
+  test("does not try again on other errors", async () => {
+    const calls = respond([500]);
+    await expect(fetchHtml("https://www.target.com.au/x", 0)).rejects.toThrow("HTTP 500");
+    expect(calls).toHaveLength(1);
   });
 });

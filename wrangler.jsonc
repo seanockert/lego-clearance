@@ -5,8 +5,10 @@
   "compatibility_date": "2026-11-01",
   "observability": { "enabled": true },
   "triggers": {
-    // Poll every 15 minutes. 22:00 UTC is 8am in Brisbane (no daylight saving) for the daily heartbeat.
-    "crons": ["*/15 * * * *", "0 22 * * *"]
+    // Brisbane is UTC+10 with no daylight saving.
+    // Poll at 7:00, 7:20, 7:40 and 13:00, 13:20, 13:40 Brisbane. The later runs in a window are backups
+    // if a retailer blocks the first run. Alerts go out once. 22:00 UTC is 8am for the daily heartbeat.
+    "crons": ["0,20,40 21,3 * * *", "0 22 * * *"]
   },
   "d1_databases": [
     {

@@ -9,12 +9,10 @@ const CLEARANCE_URL = `${CATEGORY_URL}?clearance=True`;
 const PER_PAGE = 48;
 /** Stops a bad product count from using up the subrequest budget. */
 const MAX_CLEARANCE_PAGES = 5;
-/**
- * Each run reads one page of the full catalogue to learn normal prices, so all pages are read every
- * CATALOGUE_PAGES runs (3 hours at 15 minutes). The catalogue has 10 pages now. Pages past the end are empty.
- */
-const CATALOGUE_PAGES = 12;
-const RUN_INTERVAL_MS = 15 * 60_000;
+/** The catalogue has 10 pages now. This stops a bad product count from using up the subrequest budget. */
+const MAX_CATALOGUE_PAGES = 15;
+/** Wait before the second try of a page that Target's bot protection blocked (HTTP 403). */
+const BLOCKED_RETRY_MS = 5_000;
 /** Constructor.io browse-by-ID takes this many IDs per call. */
 const STOCK_BATCH = 20;
 
@@ -100,11 +98,30 @@ export function parseStock(json: unknown): Map<string, string[]> {
   return stock;
 }
 
-async function fetchHtml(url: string): Promise<string> {
-  const res = await fetch(url, { headers: { "user-agent": USER_AGENT, accept: "text/html" } });
-  const html = await res.text();
-  if (!res.ok) throw new HttpError(url, res.status, html.slice(0, 200));
-  return html;
+/**
+ * Fetches a Target page. Target's bot protection sometimes blocks a request with HTTP 403,
+ * so a 403 gets one more try after `retryMs`.
+ */
+export async function fetchHtml(url: string, retryMs = BLOCKED_RETRY_MS): Promise<string> {
+  for (let attempt = 1; ; attempt++) {
+    const res = await fetch(url, { headers: { "user-agent": USER_AGENT, accept: "text/html" } });
+    const html = await res.text();
+    if (res.ok) return html;
+    if (res.status !== 403 || attempt === 2) throw new HttpError(url, res.status, html.slice(0, 200));
+    await new Promise((resolve) => setTimeout(resolve, retryMs));
+  }
+}
+
+/** Reads pages 2 and up of a listing, and returns the items of all pages. */
+async function fetchOtherPages(url: string, first: { items: Item[]; total: number }, maxPages: number): Promise<Item[]> {
+  const items = [...first.items];
+  const pages = Math.min(Math.ceil(first.total / PER_PAGE), maxPages);
+  for (let page = 2; page <= pages; page++) {
+    const pageUrl = new URL(url);
+    pageUrl.searchParams.set("page", String(page));
+    items.push(...parseListing(await fetchHtml(pageUrl.toString())).items);
+  }
+  return items;
 }
 
 async function fetchStock(key: string, ids: string[]): Promise<Map<string, string[]>> {
@@ -128,16 +145,11 @@ export async function fetchTarget(db: D1Database, now: Date): Promise<Item[]> {
   // 1. Clearance items, and the Constructor.io key from the same page.
   const firstPage = await fetchHtml(CLEARANCE_URL);
   const key = parseConstructorKey(firstPage);
-  const first = parseListing(firstPage);
-  const items = [...first.items];
-  const pages = Math.min(Math.ceil(first.total / PER_PAGE), MAX_CLEARANCE_PAGES);
-  for (let page = 2; page <= pages; page++) {
-    items.push(...parseListing(await fetchHtml(`${CLEARANCE_URL}&page=${page}`)).items);
-  }
+  const items = await fetchOtherPages(CLEARANCE_URL, parseListing(firstPage), MAX_CLEARANCE_PAGES);
 
-  // 2. Learn normal prices from one page of the full catalogue.
-  const cataloguePage = (Math.floor(now.getTime() / RUN_INTERVAL_MS) % CATALOGUE_PAGES) + 1;
-  const catalogue = parseListing(await fetchHtml(`${CATEGORY_URL}?page=${cataloguePage}`)).items;
+  // 2. Learn normal prices from the full catalogue.
+  const catalogueFirst = parseListing(await fetchHtml(CATEGORY_URL));
+  const catalogue = await fetchOtherPages(CATEGORY_URL, catalogueFirst, MAX_CATALOGUE_PAGES);
   const nowIso = now.toISOString();
   const updates = catalogue.filter((it) => !it.clearance).map((it) => upsertRegularPrice(db, it, nowIso));
   if (updates.length > 0) await db.batch(updates);
