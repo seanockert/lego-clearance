@@ -1,13 +1,15 @@
-import { RETAILER_NAMES, STORES, storeName } from "./config";
-import { percentOff } from "./diff";
-import type { Alert, AlertReason } from "./types";
+import { RETAILER_NAMES, STORES, storeName, type Settings } from "./config";
+import type { Health } from "./db";
+import { brisbaneDate, isGoodBuy, percentOff } from "./diff";
+import type { Alert, AlertReason, Retailer, StoredItem } from "./types";
 
 /** If a run finds more alerts than this, send one digest message. */
 const DIGEST_THRESHOLD = 5;
 /** Telegram rejects messages over 4096 characters. */
 const MAX_TEXT = 4000;
 
-export type Message = { title: string; message: string; url?: string; silent?: boolean };
+/** `html: true` means `message` is already Telegram HTML and fits the limit. */
+export type Message = { title: string; message: string; url?: string; silent?: boolean; html?: boolean };
 
 export type TelegramConfig = { botToken?: string; chatId?: string };
 
@@ -21,6 +23,7 @@ const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;")
 export function toTelegramText(msg: Message): string {
   const link = msg.url ? `\n<a href="${escapeHtml(msg.url)}">Open product</a>` : "";
   const head = `<b>${escapeHtml(msg.title)}</b>\n`;
+  if (msg.html) return head + msg.message + link;
   const room = MAX_TEXT - head.length - link.length;
   return head + escapeHtml(msg.message.slice(0, room)) + link;
 }
@@ -93,4 +96,56 @@ export async function sendAlerts(config: TelegramConfig, alerts: Alert[]): Promi
   if (alerts.length === 0) return;
   if (alerts.length > DIGEST_THRESHOLD) return sendMessage(config, formatDigest(alerts));
   for (const alert of alerts) await sendMessage(config, formatAlert(alert));
+}
+
+/**
+ * Builds the daily message: the deals in stock at a watched store now, best first.
+ * Shows a retailer problem only when its check fails, because then its list can be old.
+ */
+export function formatDailySummary(
+  itemsByRetailer: Map<Retailer, StoredItem[]>,
+  health: Map<Retailer, Health>,
+  settings: Settings,
+): Message {
+  const sections: string[] = [];
+  let total = 0;
+  let room = MAX_TEXT - 200;
+
+  for (const [retailer, items] of itemsByRetailer) {
+    const name = RETAILER_NAMES[retailer];
+    const h = health.get(retailer);
+    // Items not seen in the last good run are no longer on clearance.
+    const deals = items
+      .filter((it) => it.lastSeen === h?.last_success && isGoodBuy(it, settings))
+      .sort((a, b) => percentOff(b) - percentOff(a));
+    total += deals.length;
+
+    const warn = !h
+      ? "\n<i>Not checked yet.</i>"
+      : h.consecutive_failures > 0
+        ? `\n<i>Check failing since ${h.last_success ? brisbaneDate(new Date(h.last_success)) : "start"}. List can be old.</i>`
+        : "";
+
+    const lines: string[] = [];
+    for (const it of deals) {
+      const stores = it.stores.map((id) => storeName(retailer, id)).join(", ") || "online only";
+      const line = `• <a href="${escapeHtml(it.url)}">${escapeHtml(it.name)}</a>\n  ${escapeHtml(priceLine({ item: it, reason: "new-deal", newStores: [] }))} at ${escapeHtml(stores)}`;
+      if (line.length + 1 > room) {
+        lines.push(`…and ${deals.length - lines.length} more`);
+        break;
+      }
+      room -= line.length + 1;
+      lines.push(line);
+    }
+    const body = lines.length ? lines.join("\n") : "No deals in stock.";
+    sections.push(`<b>${name}</b> (${deals.length})${warn}\n${body}`);
+  }
+
+  const rule = `Deal = ${settings.minPercentOff}%+ off, in stock at a Brisbane store you watch.`;
+  return {
+    title: total ? `${total} LEGO clearance deal${total === 1 ? "" : "s"} in stock` : "No LEGO clearance deals in stock today",
+    message: `${sections.join("\n\n")}\n\n<i>${escapeHtml(rule)}</i>`,
+    html: true,
+    silent: total === 0,
+  };
 }

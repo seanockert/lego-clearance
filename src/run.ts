@@ -2,10 +2,10 @@ import { RETAILER_NAMES, readSettings } from "./config";
 import { clearMissing, insertAlert, insertPrice, loadHealth, loadItems, saveHealth, sentKeys, upsertItem } from "./db";
 import { dedupeKey, detect } from "./diff";
 import { nextHealth } from "./health";
-import { telegramConfig, sendAlerts, sendMessage } from "./notify";
+import { formatDailySummary, telegramConfig, sendAlerts, sendMessage } from "./notify";
 import { fetchBigw } from "./retailers/bigw";
 import { fetchTarget } from "./retailers/target";
-import type { Alert, Env, Item, Retailer } from "./types";
+import type { Alert, Env, Item, Retailer, StoredItem } from "./types";
 
 type Fetcher = (env: Env, watchlist: string[]) => Promise<Item[]>;
 
@@ -105,18 +105,17 @@ async function recordHealth(
       message: `${h.consecutive_failures} failed runs in a row.\nLast error: ${h.last_error}`,
     });
   } else if (notify === "recovered") {
-    await sendMessage(telegramConfig(env), { title: `LEGO monitor recovered: ${name}`, message: `${h.item_count} items read.` });
+    await sendMessage(telegramConfig(env), { title: `LEGO monitor recovered: ${name}`, message: "Checks work again." });
   }
 }
 
-/** Sends the daily status message. */
+/** Sends the daily message: the deals in stock now at each retailer. */
 export async function sendHeartbeat(env: Env): Promise<void> {
+  const settings = readSettings(env);
   const health = await loadHealth(env.DB);
-  const lines = Object.keys(FETCHERS).map((r) => {
-    const h = health.get(r as Retailer);
-    if (!h) return `${RETAILER_NAMES[r as Retailer]}: no runs yet`;
-    const status = h.consecutive_failures === 0 ? "OK" : `FAILING (${h.consecutive_failures} runs): ${h.last_error}`;
-    return `${RETAILER_NAMES[r as Retailer]}: ${status}, ${h.item_count ?? 0} items, last success ${h.last_success ?? "never"}`;
-  });
-  await sendMessage(telegramConfig(env), { title: "LEGO monitor daily check", message: lines.join("\n"), silent: true });
+  const itemsByRetailer = new Map<Retailer, StoredItem[]>();
+  for (const r of Object.keys(FETCHERS) as Retailer[]) {
+    itemsByRetailer.set(r, [...(await loadItems(env.DB, r)).values()]);
+  }
+  await sendMessage(telegramConfig(env), formatDailySummary(itemsByRetailer, health, settings));
 }

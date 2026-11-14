@@ -15,7 +15,8 @@ It runs again 20 and 40 minutes later in each window.
 These runs are backups for when a retailer blocks a run.
 They send only alerts that the earlier runs did not send.
 
-Each day at 8am Brisbane time, it sends a status message.
+Each day at 8am Brisbane time, it sends a list of the deals in stock now at a watched store, best first.
+It is silent when there are no deals. It shows a warning for a retailer whose check fails.
 After 3 failed runs in a row for a retailer (one full window), it sends a "monitor broken" alert.
 
 ## Data sources

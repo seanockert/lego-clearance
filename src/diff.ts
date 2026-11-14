@@ -17,6 +17,11 @@ function isWatchlistHit(item: Item, settings: Settings): boolean {
   return target !== undefined && item.priceCents <= target && (item.stores.length > 0 || item.nationalStock);
 }
 
+/** True if the item is worth buying now: a deal or a watchlist hit. */
+export function isGoodBuy(item: Item, settings: Settings): boolean {
+  return isDeal(item, settings) || isWatchlistHit(item, settings);
+}
+
 /**
  * Compares the new state of an item with the stored state and returns the alert to send, if any.
  * Alerts only on a change: a new deal, a lower price, or stock at a watched store that had none.
