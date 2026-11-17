@@ -1,5 +1,8 @@
 export type Retailer = "bigw" | "target";
 
+/** A data source with a health record: a retailer, or the OzBargain feed. */
+export type Source = Retailer | "ozbargain";
+
 export type Env = {
   DB: D1Database;
   MIN_PERCENT_OFF: string;
@@ -7,6 +10,7 @@ export type Env = {
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_CHAT_ID?: string;
   ADMIN_TOKEN?: string;
+  INGEST_TOKEN?: string;
 };
 
 export type Store = { id: string; name: string; phone?: string };

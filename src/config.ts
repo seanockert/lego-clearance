@@ -1,4 +1,4 @@
-import type { Env, Retailer, Store } from "./types";
+import type { Env, Retailer, Source, Store } from "./types";
 
 export const STORES: Record<Retailer, Store[]> = {
   bigw: [
@@ -19,7 +19,7 @@ export const STORES: Record<Retailer, Store[]> = {
   ],
 };
 
-export const RETAILER_NAMES: Record<Retailer, string> = { bigw: "Big W", target: "Target" };
+export const RETAILER_NAMES: Record<Source, string> = { bigw: "Big W", target: "Target", ozbargain: "OzBargain" };
 
 export function storeName(retailer: Retailer, id: string): string {
   return STORES[retailer].find((s) => s.id === id)?.name ?? id;

@@ -1,5 +1,5 @@
 import type { Health } from "./db";
-import type { Retailer } from "./types";
+import type { Source } from "./types";
 
 /** Failed runs in a row before the "monitor broken" alert. */
 export const FAILURE_THRESHOLD = 3;
@@ -8,7 +8,7 @@ export type FetchResult = { ok: true; count: number } | { ok: false; error: stri
 
 /** Returns the new health of a retailer and the status alert to send, if any. */
 export function nextHealth(
-  retailer: Retailer,
+  retailer: Source,
   prev: Health | undefined,
   result: FetchResult,
   now: string,

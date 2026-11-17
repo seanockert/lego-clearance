@@ -7,7 +7,7 @@
   "triggers": {
     // Brisbane is UTC+10 with no daylight saving.
     // Poll at 7:00, 7:20, 7:40 and 13:00, 13:20, 13:40 Brisbane. The later runs in a window are backups
-    // if a retailer blocks the first run. Alerts go out once. 22:00 UTC is 8am for the daily heartbeat.
+    // if Target blocks the first run. Alerts go out once. 22:00 UTC is 8am for the daily heartbeat.
     "crons": ["0,20,40 21,3 * * *", "0 22 * * *"]
   },
   "d1_databases": [
@@ -28,4 +28,5 @@
   // TELEGRAM_BOT_TOKEN - token of the Telegram bot that sends alerts.
   // TELEGRAM_CHAT_ID - your chat ID with the bot.
   // ADMIN_TOKEN - bearer token for the /debug routes.
+  // INGEST_TOKEN - bearer token for the /ingest routes, used by the home runner (scripts/home.ts).
 }

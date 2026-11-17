@@ -1,4 +1,4 @@
-import type { Retailer, StoredItem, Item } from "./types";
+import type { Retailer, Source, StoredItem, Item } from "./types";
 
 type ItemRow = {
   retailer: Retailer;
@@ -16,7 +16,7 @@ type ItemRow = {
 };
 
 export type Health = {
-  retailer: Retailer;
+  retailer: Source;
   consecutive_failures: number;
   broken_alert_sent: number;
   last_error: string | null;
@@ -98,7 +98,7 @@ export function insertAlert(db: D1Database, key: string, item: Item, reason: str
     .bind(key, item.retailer, item.id, reason, now);
 }
 
-export async function loadHealth(db: D1Database): Promise<Map<Retailer, Health>> {
+export async function loadHealth(db: D1Database): Promise<Map<Source, Health>> {
   const { results } = await db.prepare("SELECT * FROM retailer_health").all<Health>();
   return new Map(results.map((h) => [h.retailer, h]));
 }

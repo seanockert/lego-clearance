@@ -1,15 +1,15 @@
 import { RETAILER_NAMES, STORES, storeName, type Settings } from "./config";
 import type { Health } from "./db";
 import { brisbaneDate, isGoodBuy, percentOff } from "./diff";
-import type { Alert, AlertReason, Retailer, StoredItem } from "./types";
+import type { Alert, AlertReason, Retailer, Source, StoredItem } from "./types";
 
 /** If a run finds more alerts than this, send one digest message. */
 const DIGEST_THRESHOLD = 5;
 /** Telegram rejects messages over 4096 characters. */
 const MAX_TEXT = 4000;
 
-/** `html: true` means `message` is already Telegram HTML and fits the limit. */
-export type Message = { title: string; message: string; url?: string; silent?: boolean; html?: boolean };
+/** `html: true` means `message` is already Telegram HTML and fits the limit. `linkText` defaults to "Open product". */
+export type Message = { title: string; message: string; url?: string; linkText?: string; silent?: boolean; html?: boolean };
 
 export type TelegramConfig = { botToken?: string; chatId?: string };
 
@@ -21,7 +21,7 @@ const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;")
 
 /** Builds the Telegram HTML text: bold title, body, then a link. */
 export function toTelegramText(msg: Message): string {
-  const link = msg.url ? `\n<a href="${escapeHtml(msg.url)}">Open product</a>` : "";
+  const link = msg.url ? `\n<a href="${escapeHtml(msg.url)}">${escapeHtml(msg.linkText ?? "Open product")}</a>` : "";
   const head = `<b>${escapeHtml(msg.title)}</b>\n`;
   if (msg.html) return head + msg.message + link;
   const room = MAX_TEXT - head.length - link.length;
@@ -104,7 +104,7 @@ export async function sendAlerts(config: TelegramConfig, alerts: Alert[]): Promi
  */
 export function formatDailySummary(
   itemsByRetailer: Map<Retailer, StoredItem[]>,
-  health: Map<Retailer, Health>,
+  health: Map<Source, Health>,
   settings: Settings,
 ): Message {
   const sections: string[] = [];

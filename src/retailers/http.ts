@@ -26,6 +26,14 @@ export async function fetchJson(url: string, init: RequestInit = {}): Promise<un
   }
 }
 
+/** Fetches text. Throws HttpError on a non-2xx status. */
+export async function fetchText(url: string, init: RequestInit = {}): Promise<string> {
+  const res = await fetch(url, { ...init, headers: { "user-agent": USER_AGENT, ...init.headers } });
+  const text = await res.text();
+  if (!res.ok) throw new HttpError(url, res.status, text.slice(0, 200));
+  return text;
+}
+
 /** Returns the LEGO set number in a product name: the last 4 to 6 digit number. */
 export function parseSetNumber(name: string): string | null {
   const matches = name.match(/(?<![\d.$])\d{4,6}(?![\d.])/g);
